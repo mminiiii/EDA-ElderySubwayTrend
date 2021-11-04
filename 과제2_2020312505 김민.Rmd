@@ -1,0 +1,285 @@
+---
+title: "assign2_KimMin_2020312505"
+author: "Kim Min"
+date: '2021 7 31 '
+output: html_document
+---
+
+<지하철 데이터 불러오기>
+```{r}
+#setwd("C:/Users/USER/Desktop/대학/3학기/도전학기 데소분")
+rawfile <- read.csv("subway_paid_free2.csv")
+#View(rawfile)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(lubridate)
+```
+
+<데이터 전처리>
+```{r}
+#yearmonth 열이 20xxxx(연월) 형식이어서 엑셀 상에서 모든 날짜에 01일로 일자를 붙여준 후, r 상에서 date 형식으로 변환해 주었다.
+class(rawfile$yearmonth)
+rawfile$yearmonth <- as.character(rawfile$yearmonth)
+rawfile$yearmonth <- as.Date(rawfile$yearmonth, format("%Y%m%d"))
+class(rawfile$yearmonth)
+#View(rawfile)
+```
+
+```{r}
+#지하철 승차 인원 변화 by month
+subway_m <- rawfile %>% select(yearmonth, line, paid_ride, free_ride) %>% filter(line %in% seq(1,9)) %>% group_by(yearmonth) %>% summarise(total_PaidRide = sum(paid_ride), total_FreeRide = sum(free_ride)) %>% filter(yearmonth != "2019-06-01")
+#%>% filter(yearmonth != "2016-09-01") %>% filter(yearmonth != "2016-10-01") %>% filter(yearmonth != "2018-03-01") %>% filter(yearmonth != "2019-07-01")
+#View(subway_m)
+
+#지하철 승차 인원 변화 by month & line
+subway_m_l <- rawfile %>% select(yearmonth, line, paid_ride, free_ride) %>% filter(line %in% seq(1,9)) %>% group_by(yearmonth, line) %>% summarise(total_PaidRide = sum(paid_ride), total_FreeRide = sum(free_ride)) %>% mutate(total = total_PaidRide + total_FreeRide)
+#View(subway_m_l)
+```
+
+<시계열로 분석하기>
+```{r}
+#전체 승차 인원 변화
+subway_m_all <- subway_m %>% mutate(total = total_PaidRide + total_FreeRide)
+
+#전체 승차 인원 변화 시각화 (2016 ~ 2021)
+datebreaks <- seq(as.Date("2016-01-01"), as.Date("2021-06-01"), by="6 month")
+ggplot(subway_m_all, aes(x=yearmonth, y=total))+
+  geom_line()+
+  scale_y_continuous(trans = 'log')+
+  scale_x_date(breaks=datebreaks)+
+  ggtitle("2016~2021 Change in the Number of Subway Passengers")+
+  theme(axis.text.x = element_text(angle=90), title = element_text(size=10))
+
+ggsave("totalride.png")
+
+
+#코로나19 발생 이전까지의 기간만 살펴보기 (2016 ~ 2019)
+subway_bf2019 <- subway_m_all %>% filter(yearmonth <= as.Date("2019-12-01"))
+
+ggplot(subway_bf2019, aes(x=yearmonth, y=total))+
+  geom_line(color = "blue")+
+  scale_y_continuous(trans = 'log')+
+  scale_x_date(breaks=datebreaks)+
+  ggtitle("2016~2019 Change in the Number of Subway Passengers")+
+  theme(axis.text.x = element_text(angle=90), title = element_text(size=10))
+
+
+#전체 유임 승차 인원 변화 시각화 (2016 ~ 2021)
+ggplot(subway_m, aes(x=yearmonth, y=total_PaidRide))+
+  geom_line(color="orange")+
+  scale_y_continuous(trans = 'log')+
+  scale_x_date(breaks=datebreaks)+
+  ggtitle("2016~2021 Change in the Number of Paid Passengers")+
+  theme(axis.text.x = element_text(angle=90), title = element_text(size=10))
+
+ggsave("paidride.png")
+
+
+#전체 무임 승차 인원 변화 시각화 (2016 ~ 2021)
+ggplot(subway_m, aes(x=yearmonth, y=total_FreeRide))+
+  geom_line(color="green")+
+  scale_y_continuous(trans = 'log')+
+  scale_x_date(breaks=datebreaks)+
+  ggtitle("2016~2021 Change in the Number of Free Passengers")+
+  theme(axis.text.x = element_text(angle=90), title = element_text(size=10))
+
+ggsave("freeride.png")
+```
+
+<노선별 유임승차와 무임승차 비율 알아보기>
+```{r}
+#Column explanation: PRperM_avg = Paid Ride per Month average / FRperM_avg = Free Ride per Month average / TperM_avg = Total Ride per Month average / FRpct = Free Ride percentage
+
+subway2016 <- subway_m_l %>% filter(yearmonth <= as.Date("2016-12-01")) %>% group_by(line) %>% summarise(PRperM_avg = sum(total_PaidRide)/12, FRperM_avg = sum(total_FreeRide)/12, TperM_avg = sum(total)/12) %>% mutate(FRpct = FRperM_avg/TperM_avg*100) %>% mutate(year = 2016)
+
+subway2017 <- subway_m_l %>% filter(yearmonth <= as.Date("2017-12-01")) %>% filter(yearmonth > as.Date("2016-12-01")) %>% group_by(line) %>% summarise(PRperM_avg = sum(total_PaidRide)/12, FRperM_avg = sum(total_FreeRide)/12, TperM_avg = sum(total)/12) %>% mutate(FRpct = FRperM_avg/TperM_avg*100) %>% mutate(year = 2017)
+
+subway2018 <- subway_m_l %>% filter(yearmonth <= as.Date("2018-12-01")) %>% filter(yearmonth > as.Date("2017-12-01")) %>% group_by(line) %>% summarise(PRperM_avg = sum(total_PaidRide)/12, FRperM_avg = sum(total_FreeRide)/12, TperM_avg = sum(total)/12) %>% mutate(FRpct = FRperM_avg/TperM_avg*100) %>% mutate(year = 2018)
+
+subway2019 <- subway_m_l %>% filter(yearmonth <= as.Date("2019-12-01")) %>% filter(yearmonth > as.Date("2018-12-01")) %>% group_by(line) %>% summarise(PRperM_avg = sum(total_PaidRide)/12, FRperM_avg = sum(total_FreeRide)/12, TperM_avg = sum(total)/12) %>% mutate(FRpct = FRperM_avg/TperM_avg*100) %>% mutate(year = 2019)
+
+subway2020 <- subway_m_l %>% filter(yearmonth <= as.Date("2020-12-01")) %>% filter(yearmonth > as.Date("2019-12-01")) %>% group_by(line) %>% summarise(PRperM_avg = sum(total_PaidRide)/12, FRperM_avg = sum(total_FreeRide)/12, TperM_avg = sum(total)/12) %>% mutate(FRpct = FRperM_avg/TperM_avg*100) %>% mutate(year = 2020)
+
+
+subway_l <- rbind(subway2016, subway2017)
+subway_l <- rbind(subway_l, subway2018)
+subway_l <- rbind(subway_l, subway2019)
+subway_l <- rbind(subway_l, subway2020)
+#View(subway_l)
+```
+
+```{r}
+#노선별 무임승차 비율 시각화
+ggplot(subway_l, aes(x=line, y=FRpct, fill=as.factor(year)))+
+  geom_col()+
+  facet_wrap(~ as.factor(year), ncol=5)+
+  scale_fill_discrete(name="Year")+
+  ylab("Free Ride / Total Ride")+
+  ggtitle("2016 ~ 2020 Free Ride Ratio by Subway Line")
+
+ggsave("FR ratio by line.png")
+```
+
+<무임승차 비율이 높은 지하철역 알아보기>
+```{r}
+subway_stt <- rawfile %>% select(yearmonth, line, station, paid_ride, free_ride) %>% filter(line %in% seq(1,9)) %>% mutate(total_ride = paid_ride + free_ride, FR_pct = free_ride/total_ride*100)
+#View(subway_stt)
+
+#연도별로 무임승차 비율이 30%가 넘는 역들만 남기기
+stt2016 <- subway_stt %>% filter(yearmonth <= as.Date("2016-12-01")) %>% filter(FR_pct >= 30) %>% group_by(station) %>% summarise(count = n()) %>% mutate(year = 2016)
+
+stt2017 <- subway_stt %>% filter(yearmonth <= as.Date("2017-12-01")) %>% filter(yearmonth > as.Date("2016-12-01")) %>% filter(FR_pct >= 30) %>% group_by(station) %>% summarise(count = n()) %>% mutate(year = 2017)
+
+stt2018 <- subway_stt %>% filter(yearmonth <= as.Date("2018-12-01")) %>% filter(yearmonth > as.Date("2017-12-01")) %>% filter(FR_pct >= 30) %>% group_by(station) %>% summarise(count = n()) %>% mutate(year = 2018)
+
+stt2019 <- subway_stt %>% filter(yearmonth <= as.Date("2019-12-01")) %>% filter(yearmonth > as.Date("2018-12-01")) %>% filter(FR_pct >= 30) %>% group_by(station) %>% summarise(count = n()) %>% mutate(year = 2019)
+
+stt2020 <- subway_stt %>% filter(yearmonth <= as.Date("2020-12-01")) %>% filter(yearmonth > as.Date("2019-12-01")) %>% filter(FR_pct >= 30) %>% group_by(station) %>% summarise(count = n()) %>% mutate(year = 2020)
+
+over30 <- rbind(stt2016, stt2017)
+over30 <- rbind(over30, stt2018)
+over30 <- rbind(over30, stt2019)
+over30 <- rbind(over30, stt2020)
+#View(over30)
+```
+
+```{r}
+#연도별 무임승차 비율이 30% 이상인 역 개수 시각화
+over30_y <- over30 %>% group_by(year) %>% summarise(over30=n())
+#View(over30_y)
+
+ggplot(over30_y, aes(x=year, y=over30, fill=as.factor(year)))+
+  geom_col(width=0.5)+
+  scale_fill_brewer(palette = "Greens")+
+  ylab("count")+
+  ggtitle("Number of Stations with a Free Ride Ratio of 30% or More by Year")
+
+ggsave("yearly_freeride.png")
+
+
+#무임승차 비율 높은 역 시각화
+ggplot(over30, aes(x=reorder(station, -count), y=count, fill=as.factor(year)))+
+  geom_col(width=0.6)+
+  facet_wrap(~ as.factor(year), nrow=5)+
+  scale_fill_discrete(name="Year")+
+  ggtitle("Stations with a Free Ride Ratio of 30% or More")+
+  theme(axis.text.x = element_text(angle=90, size=12), axis.text.y = element_text(size=10), title = element_text(size=16))
+
+ggsave("over30.png", width=10, height=8)
+```
+
+<무임승차 비율이 낮은 지하철역 알아보기>
+```{r}
+#연도별로 무임승차 비율이 7% 미만인 역들만 남기기 (무임승차 비율 7% 미만 역 개수가 30% 이상 역의 개수와 비슷해서 7%로 기준을 잡았음)
+stt2016_2 <- subway_stt %>% filter(yearmonth <= as.Date("2016-12-01")) %>% filter(FR_pct < 7) %>% group_by(station) %>% summarise(count = n()) %>% mutate(year = 2016)
+
+stt2017_2 <- subway_stt %>% filter(yearmonth <= as.Date("2017-12-01")) %>% filter(yearmonth > as.Date("2016-12-01")) %>% filter(FR_pct < 7) %>% group_by(station) %>% summarise(count = n()) %>% mutate(year = 2017)
+
+stt2018_2 <- subway_stt %>% filter(yearmonth <= as.Date("2018-12-01")) %>% filter(yearmonth > as.Date("2017-12-01")) %>% filter(FR_pct < 7) %>% group_by(station) %>% summarise(count = n()) %>% mutate(year = 2018)
+
+stt2019_2 <- subway_stt %>% filter(yearmonth <= as.Date("2019-12-01")) %>% filter(yearmonth > as.Date("2018-12-01")) %>% filter(FR_pct < 7) %>% group_by(station) %>% summarise(count = n()) %>% mutate(year = 2019)
+
+stt2020_2 <- subway_stt %>% filter(yearmonth <= as.Date("2020-12-01")) %>% filter(yearmonth > as.Date("2019-12-01")) %>% filter(FR_pct < 7) %>% group_by(station) %>% summarise(count = n()) %>% mutate(year = 2020)
+
+less7 <- rbind(stt2016_2, stt2017_2)
+less7 <- rbind(less7, stt2018_2)
+less7 <- rbind(less7, stt2019_2)
+less7 <- rbind(less7, stt2020_2)
+#View(less7)
+```
+
+```{r}
+#무임승차 비율 낮은 역 시각화
+ggplot(less7, aes(x=reorder(station, -count), y=count, fill=as.factor(year)))+
+  geom_col(width=0.6)+
+  facet_wrap(~ as.factor(year), nrow=5)+
+  scale_fill_discrete(name="Year")+
+  ggtitle("Stations with a Free Ride Ratio of Less than 7%")+
+  theme(axis.text.x = element_text(angle=90, size=12), axis.text.y = element_text(size=10), title = element_text(size=16))
+
+ggsave("less7.png", width=10, height=8)
+#그래프가 좀 깨져 보이지만, 이미지로 저장하면 알맞게 나옵니다.
+```
+
+<인구 데이터 불러오기>
+```{r}
+#전처리 과정에서 구 별 데이터는 지우고 분기 별 합계 데이터만 남김
+population <- read.csv("Seoul Population.txt", sep = "\t")
+#View(population)
+
+#분기 별 인덱스를 시계열 분석을 위해 1,4,7,10월로 바꿔 표기
+#period 열을 날짜 데이터로 바꿔주기
+class(population$period)
+population$period <- as.character(population$period)
+population$period <- as.Date(population$period)
+class(population$period)
+```
+
+```{r}
+#서울시 전체 인구 변화와 고령 인구 변화 알아보기
+datebreaks2 <- seq(as.Date("2016-01-01"), as.Date("2021-01-01"), by="3 month")
+
+elders <- population %>% select(period, X65_69, X70_74, X75_79, X80_84, X85_89, X90_94, X95_99, X100_more) %>% mutate(total_elder = X65_69 + X70_74 + X75_79 + X80_84 + X85_89 + X90_94 + X95_99 + X100_more)
+
+ggplot(population, aes(x=period, y=total))+
+  geom_line()+
+  scale_x_date(breaks=datebreaks2)+
+  theme(axis.text.x = element_text(angle=90))+
+  geom_line(data=elders, aes(x=period, y=total_elder), color="red")
+
+#y값 범위 차이가 커서 그래프가 효과적이진 않다 -> 아마 보고서에서는 생략할 것 같다
+```
+
+<무임승차 비율과 고령 인구 변화의 관계 알아보기>
+```{r}
+#시각화를 위한 데이터 전처리
+elders_t <- elders %>% select(period, total_elder)
+#View(elders_t)
+
+frpct_avg <- subway_stt %>% group_by(yearmonth) %>% summarise(avg_frpct = mean(FR_pct)) %>% filter(yearmonth <= as.Date("2021-03-01"))
+frpct_avg <- rename(frpct_avg, "period" = "yearmonth") 
+#View(frpct_avg)
+
+fr_elders <- left_join(frpct_avg, elders_t) %>% mutate(eld_cvt = total_elder/100000)
+#View(fr_elders)
+#eld_cvt는 변환된 고령 인구 값으로, 효과적인 시각화를 위해 고령 인구 전체 값을 y 범위에 맞게 줄여주었다
+```
+
+```{r}
+#무임승차 비율 변화와 고령 인구 증가 추이 비교 시각화
+datebreaks2 <- seq(as.Date("2016-01-01"), as.Date("2021-03-01"), by="3 month")
+
+ggplot(fr_elders, aes(x=period, y=avg_frpct))+
+  geom_line(color="blue")+
+  geom_smooth(method="lm", color="red")+
+  scale_x_date(breaks=datebreaks2)+
+  theme(axis.text.x = element_text(angle=90))+
+  geom_point(aes(x=period, y=eld_cvt), color="orange")+
+  ggtitle("Comparison of Seoul Aged Population Trend and Subway Free Ride Ratio")+
+  ylab("average free ride pct")
+
+ggsave("Aged_Ride.png")
+
+#무임승차 비율 변화와 고령 인구 증가 사이의 관계 유효성 검증
+summary(lm(total_elder ~ avg_frpct, data=fr_elders)) #p-value: 0.0069
+summary(lm(eld_cvt ~ avg_frpct, data=fr_elders)) #p-value: 0.0069
+```
+
+```{r}
+free2020 <- rawfile %>% filter(yearmonth <= as.Date("2020-12-01")) %>% filter(yearmonth > as.Date("2019-12-01")) %>% mutate(year = 2020) %>% group_by(year) %>% summarise(total_fr = sum(free_ride))
+#View(free2020) 315383439
+
+paid2020 <- rawfile %>% filter(yearmonth <= as.Date("2020-12-01")) %>% filter(yearmonth > as.Date("2019-12-01")) %>% mutate(year = 2020) %>% group_by(year) %>% summarise(total_pr = sum(paid_ride))
+#View(paid2020) 1652983971
+
+elders65 <- elders %>% filter(period >= as.Date("2020-01-01")) %>% filter(period < as.Date("2021-01-01")) %>% mutate(year = 2020) %>% group_by(year) %>% summarise(total_65 = sum(total_elder)/4)
+#View(elders65) 1543471
+
+elders70 <- population %>% filter(period >= as.Date("2020-01-01")) %>% filter(period < as.Date("2021-01-01")) %>% select(period, X70_74, X75_79, X80_84, X85_89, X90_94, X95_99, X100_more) %>% mutate(total_elder70 = X70_74 + X75_79 + X80_84 + X85_89 + X90_94 + X95_99 + X100_more) %>% mutate(year = 2020) %>% group_by(year) %>% summarise(total_70 = sum(total_elder70)/4)
+#View(elders70) 	1021540
+```
+
